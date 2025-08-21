@@ -11,7 +11,9 @@ motor_dict = {"m1": "Z",
     "m4": "A",
     "m5": "B",
     "m6": "C"}
-
+period = 0.01  # Default period for PSO in seconds
+pulse_width = 10  # Default pulse width in microseconds
+step_distance = 0.01  # Default distance for PSO in micrometers
 AT_default_motornames = ["X", "Y", "Z", "A", "B", "C"]
 
 def set_IOC_prefix(input_prefix):
@@ -26,7 +28,7 @@ def update_motor_dict():
     for key in motor_dict.keys():
         motor_pv = IOC_prefix + key
         axis_name = epics.caget(f"{motor_pv}.DESC")
-        axis_name = axis_name.split(" ")[-1]
+        #axis_name = axis_name.split(" ")[-1]
         motor_dict[motor_pv] = axis_name
 
 # part-speed PSO configuration for the hexapod
@@ -34,7 +36,7 @@ def update_motor_dict():
 # using the PSO (Pulse Stream Output) feature of the iXR3 controller.
 # It sets up a pulse stream that fires at a specified distance and
 # configures the waveform for pulse generation.
-def flying_hexapod_pso_configuration(distance = 0.01, period=0.01, pulse_width=10):
+def fly_pso_configuration(distance = step_distance, period=period, pulse_width=pulse_width):
     '''Configure the hexapod for part-speed operation using PSO.'''
     '''Distance : um units'''
     '''period : Periodicity of pulses generated at each distance, us units. When only one pulse is generated, this does not matter'''
@@ -54,7 +56,7 @@ def flying_hexapod_pso_configuration(distance = 0.01, period=0.01, pulse_width=1
     epics.caput(command_PV, f'PsoOutputConfigureSource(ST1, PsoOutputSource.Waveform)') # Use waveform module output as PSO output
     epics.caput(command_PV, f'PsoDistanceCounterOn(ST1)') # Enable the distance counter
 
-def flying_hexapod_pso_motion(axis="X", start=0, final=1,time=5):
+def fly(axis="X", start=0, final=1, time=5):
     '''Issue a PSO motion command to the hexapod.
     This will move the hexapod to the specified X, Y, Z coordinates
     using the configured PSO settings.
@@ -65,9 +67,12 @@ def flying_hexapod_pso_motion(axis="X", start=0, final=1,time=5):
     n = list(motor_dict.values()).index(axis) + 1  # Get the index of the axis in the motor_dict
     motorpv = list(motor_dict.keys())[n-1]
     axis = AT_default_motornames[n-1]
+    print(f"Moving axis to {start} ...")
     epics.caput(command_PV, f'MoveAbsolute({axis}, {start}, 1)') # Move axis to the specified position
     while epics.caget(f'{motorpv}.DMOV'):
         sleep(0.02)
+    N_pulses = int(abs(final - start) / step_distance)  # Calculate the number of pulses to fire
+    print(f" Done. Fly to {final} in {time} seconds. PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
     epics.caput(command_PV, f'PsoDistanceEventsOn(ST1)') # Turn on PSO
     epics.caput(command_PV, f'MoveAbsolute({axis}, {final}, {abs(final-start)/time})') # Move ST1 to the specified position
     while epics.caget(f'{motorpv}.DMOV'):
