@@ -77,8 +77,10 @@ def fly(axis="X", start=0, final=1, time=5):
     epics.caput(command_PV, f'MoveAbsolute({axis}, {final}, {abs(final-start)/time})') # Move ST1 to the specified position
     # Wait a moment to ensure the move has started
     while not epics.caget(f'{IOC_prefix}{motorpv}.DMOV'):
+        print(epics.caget(f'{IOC_prefix}{motorpv}.DMOV'))
         sleep(0.02)
     while epics.caget(f'{IOC_prefix}{motorpv}.DMOV'):
+        print(epics.caget(f'{IOC_prefix}{motorpv}.DMOV'))
         sleep(0.02)
     epics.caput(command_PV, f'PsoOutputOff(ST1)') # Turn off PSO 
 
