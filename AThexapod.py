@@ -75,7 +75,7 @@ def fly(axis="X", start=0, final=1, time=5):
     print(f" Done. Fly to {final} in {time} seconds. PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
     epics.caput(command_PV, f'PsoDistanceEventsOn(ST1)') # Turn on PSO
     epics.caput(command_PV, f'MoveAbsolute({axis}, {final}, {abs(final-start)/time})') # Move ST1 to the specified position
-    sleep(0.1)  # Wait a moment to ensure the move has started
+    sleep(0.5)  # Wait a moment to ensure the move has started
     while epics.caget(f'{IOC_prefix}{motorpv}.DMOV'):
         sleep(0.02)
     epics.caput(command_PV, f'PsoOutputOff(ST1)') # Turn off PSO 
