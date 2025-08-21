@@ -79,6 +79,7 @@ def fly(axis="X", start=0, final=1, time=5):
     while not epics.caget(f'{IOC_prefix}{motorpv}.DMOV'):
         print(epics.caget(f'{IOC_prefix}{motorpv}.DMOV'))
         sleep(0.02)
+    print(epics.caget(f'{IOC_prefix}{motorpv}.DMOV'))
     while epics.caget(f'{IOC_prefix}{motorpv}.DMOV'):
         print(epics.caget(f'{IOC_prefix}{motorpv}.DMOV'))
         sleep(0.02)
