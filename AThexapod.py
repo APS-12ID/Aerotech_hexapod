@@ -2,20 +2,32 @@ from time import sleep
 import epics
 
 command_pv_root = 'ExecuteCommand.VAL'
-IOC_prefix = '12idHXP:'
+IOC_prefix = '12idhxpAT:'
 command_PV = IOC_prefix + command_pv_root
 
+motor_dict = {"m1": "Z", 
+    "m2": "X",
+    "m3": "Y",
+    "m4": "A",
+    "m5": "B",
+    "m6": "C"}
+
+AT_default_motornames = ["X", "Y", "Z", "A", "B", "C"]
+
 def set_IOC_prefix(input_prefix):
+    #global command_PV, IOC_prefix
     IOC_prefix = input_prefix
     command_PV = IOC_prefix + command_pv_root
 
-def get_motor_pv(axis):
-    '''Return the PV for the specified motor axis.'''
-    for n in range(1, 7):
-        motorname = epics.caget(IOC_prefix + f"m{n}.DESC")
-        if axis.upper() == motorname.upper():
-            return IOC_prefix + f"m{n}"
-    raise ValueError(f"Axis {axis} not found")
+def update_motor_dict():
+    '''Update motor_dict so that the PV of the motor is the key and the axis name is the value.'''
+    #global motor_dict
+    motor_dict = {}
+    for key in motor_dict.keys():
+        motor_pv = IOC_prefix + key
+        axis_name = epics.caget(f"{motor_pv}.DESC")
+        axis_name = axis_name.split(" ")[-1]
+        motor_dict[motor_pv] = axis_name
 
 # part-speed PSO configuration for the hexapod
 # This code is used to configure the hexapod for part-speed operation
@@ -47,11 +59,18 @@ def flying_hexapod_pso_motion(axis="X", start=0, final=1,time=5):
     This will move the hexapod to the specified X, Y, Z coordinates
     using the configured PSO settings.
     '''
+    #global motor_dict
+    if axis not in motor_dict.values():
+        raise ValueError(f"Axis {axis} is not a valid axis. Valid axes are: {list(motor_dict.values())}")
+    n = list(motor_dict.values()).index(axis) + 1  # Get the index of the axis in the motor_dict
+    motorpv = list(motor_dict.keys())[n-1]
+    axis = AT_default_motornames[n-1]
     epics.caput(command_PV, f'MoveAbsolute({axis}, {start}, 1)') # Move axis to the specified position
+    while epics.caget(f'{motorpv}.DMOV'):
+        sleep(0.02)
     epics.caput(command_PV, f'PsoDistanceEventsOn(ST1)') # Turn on PSO
     epics.caput(command_PV, f'MoveAbsolute({axis}, {final}, {abs(final-start)/time})') # Move ST1 to the specified position
-    motorpv = get_motor_pv(axis)  # Ensure the axis exists
-    while epics.caget(f'{motorpv}.RBV') < final:
-        sleep(0.1)  # Wait for the motion to complete
+    while epics.caget(f'{motorpv}.DMOV'):
+        sleep(0.02)
     epics.caput(command_PV, f'PsoOutputOff(ST1)') # Turn off PSO 
 
