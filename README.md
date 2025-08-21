@@ -1,5 +1,5 @@
 # Aerotech_hexapod
-This is to fly Aerotech hexapod using part-speed PSO. It uses epics, requiring IOC for your hexapod is running. The names of axes are defined in IOC's motor DESC. For example, 'Z' for m1.DESC.
+This is to generate part-speed PSO for flyscan. It uses epics, requiring IOC for your hexapod to be running. The names of axes are defined in IOC's motor DESC. For example, 'Z' for m1.DESC.
 # how to use
 ```python
 import AThexapod as hp
