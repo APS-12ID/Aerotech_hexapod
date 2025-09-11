@@ -6,9 +6,9 @@ import time
 IP = "at-hex-12id.xray.aps.anl.gov"
 BASEPV = '12idhxpAT'
 HOST = "at-hex-12id.xray.aps.anl.gov"
-period = 0.01  # Default period for PSO in seconds
-pulse_width = 10  # Default pulse width in microseconds
-step_distance = 0.01  # Default distance for PSO in micrometers
+period = 0.000_01  # Default period for PSO in seconds
+pulse_width = 0.000_01  # Default pulse width in seconds
+step_distance = 0.01  # Default distance for PSO in mm
 
 class Hexapod:
     """A class to use pipython"""
@@ -168,10 +168,35 @@ class Hexapod:
             axisname = ax.identification.axisname.value
             if axisname in self.axes:
                 ax.motion.defaultaxisspeed.value = val
+    def enable_all_axes(self):
+        self.controller.runtime.commands.motion.enable([0, 1,2,3,4,5,6,7,8,9,10,11])
 
-    def toolmodeon(self, tool="Tool1"):
-        self.controller.runtime.commmmands.
-        
+    def disable_all_axes(self):
+        self.controller.runtime.commands.motion.disable([0, 1,2,3,4,5,6,7,8,9,10,11])
+
+    def set_work(self, xoff=0, yoff=0, zoff=0, aoff=0, boff=0, coff=0):
+        # disable the real-time hexapod kinematics. 
+        ''' After you issue the DisableHexapod() library function, you get full control of each strut. Strut axes are
+        named ST1 through ST6. Until you reset or power cycle the controller, it stores all the information
+        from previous tool and offset settings.'''
+        self.controller.runtime.commands.execute("DisableHexapod()")
+        cmd = f"SetBaseToWork({xoff},{yoff},{zoff},{aoff},{boff},{coff})"
+        self.controller.runtime.commands.execute(cmd)
+    
+    def enable_work(self):
+        self.controller.runtime.commands.execute("EnableWork()")
+
+    def set_tool(self, tool="Tool1", xoff=0, yoff=0, zoff=0, aoff=0, boff=0, coff=0):
+        self.controller.runtime.commands.execute("DisableHexapod()")
+        cmd = f'SetToolPoint(1, "{tool}", {xoff},{yoff},{zoff},{aoff},{boff},{coff})'
+        self.controller.runtime.commands.execute(cmd)
+        cmd = f'ActivateTool("{tool}")'
+        self.controller.runtime.commands.execute(cmd)
+        self.controller.runtime.commands.motion_setup.setuptasktargetmode(a1.TargetMode.Absolute)
+    
+    def enable_tool(self):
+        self.controller.runtime.commands.execute("EnableTool()")
+
     def fly_abort(self):
         
         # At this time, end the command queue.
@@ -187,38 +212,44 @@ class Hexapod:
     def set_pulsestream(self):
         self.controller.runtime.commands.device.drivepulsestreamoff('ST1') # ST1 is the real axis issuing PSO firing pulses
         self.controller.runtime.commands.execute('DrivePulseStreamConfigure(ST1, [X, Y, Z], [1.0, 1.0, 1.0])') # X/Y/Z are the virtual axes being tracked. ST1 actually fires PSO, scale is 1.0
-        self.controller.runtime.commands.device.drivepulsestreamon("ST1") # Turns on ST1's pulse stream input
+        self.controller.runtime.commands.device.drivepulsestreamon('ST1') # Turns on ST1's pulse stream input
 
     def fly_conf(self):
-        self.controller.runtime.commands.pso.psoreset("ST1") #Reset all PSO configuration
-        self.controller.runtime.commands.pso.psodistanceconfigureinputs("ST1", [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
-        self.controller.runtime.commands.pso.psowaveformconfiguremode("ST1", a1.PsoWaveformMode.Pulse)
-        #controller.runtime.commands.pso.psowaveformapplypulseconfiguration("ST1")# Applies the previous pulse configuration
-        self.controller.runtime.commands.pso.psowaveformon("ST1") # Turn on waveform generator
-        self.controller.runtime.commands.pso.psooutputconfiguresource("ST1", a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
-        self.controller.runtime.commands.pso.psodistancecounteron("ST1") # Enable the distance counter
+        self.controller.runtime.commands.pso.psoreset('ST1') #Reset all PSO configuration
+        self.controller.runtime.commands.pso.psodistanceconfigureinputs('ST1', [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
+        self.controller.runtime.commands.pso.psooutputconfigureoutput('ST1', a1.PsoOutputPin.XR3PsoOutput1)
+        self.controller.runtime.commands.pso.psooutputconfiguresource('ST1', a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
+        self.controller.runtime.commands.pso.psowaveformconfiguremode('ST1', a1.PsoWaveformMode.Pulse)
+        #controller.runtime.commands.pso.psowaveformapplypulseconfiguration('ST1')# Applies the previous pulse configuration
+        self.controller.runtime.commands.pso.psowaveformon('ST1') # Turn on waveform generator
+        self.controller.runtime.commands.pso.psodistancecounteron('ST1') # Enable the distance counter
 
     def set_pulses(self, distance = step_distance, period=period, pulse_width=pulse_width):
+        # step_distance : mm
+        # period : sec
+        # pulse_width : sec
         '''Configure the hexapod for part-speed operation using PSO.'''
-        '''Distance : um units'''
         '''period : Periodicity of pulses generated at each distance, us units. When only one pulse is generated, this does not matter'''
         '''Pulse_width : us units'''
         self.controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(ST1,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
         # In a given period (period), 1 pulse will be generated with a width of pulse_width.
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime("ST1", period)# 10 usec total time
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime("ST1", pulse_width)
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount("ST1", 1) # 1 pulse (period) per event
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('ST1', period*1_000_000) # usec total time
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('ST1', pulse_width*1_000_000) # usec
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount('ST1', 1) # 1 pulse (period) per event
         
         #Npulses = int(self.scantime/(period*0.001))
         #self.pulse_positions_index = 
 
     def goto_start_pos(self, axis='X'):
         default_speed = 5
+        # turn off pso
+        self.command_queue.commands.pso.psodistanceeventsoff('ST1')
         #global motor_dict
         self.controller.runtime.commands.motion.moveabsolute(axis, [self.start_pos], speeds=[default_speed]) # Move axis to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
 
     def set_traj(self, axis = "X", time=5, start = 0, final=1, step_distance=0.01):
+        # position units : mm
         #final = start + distance
                 # Begin a new command queue on task 1.
         if type(self.command_queue) ==type(None):
@@ -238,10 +269,10 @@ class Hexapod:
         speed = abs(final-start)/time
         print(f"Fly to {final} in {time} seconds with {speed} mm/s.") 
         print(f"PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
-        self.command_queue.commands.pso.psodistanceeventson("ST1") # Turn on PSO
+        self.command_queue.commands.pso.psodistanceeventson('ST1') # Turn on PSO
         self.command_queue.commands.motion.moveabsolute(axis, [final], [speed]) # Move ST1 to the specified position
         self.command_queue.commands.motion.waitformotiondone(axis)
-        self.command_queue.commands.pso.psooutputoff("ST1") # Turn off PSO 
+        self.command_queue.commands.pso.psooutputoff('ST1') # Turn off PSO 
         self.command_queue.commands.advanced_motion.velocityblendingoff()
 
         self.set_pulses(distance = step_distance, period=period, pulse_width=pulse_width)
@@ -268,7 +299,7 @@ class Hexapod:
         speed = abs(final-start)/time
         print(f"Fly to {final} in {time} seconds with {speed} mm/s.") 
         print(f"PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
-        self.command_queue.commands.pso.psodistanceeventson("ST1") # Turn on PSO
+        self.command_queue.commands.pso.psodistanceeventson('ST1') # Turn on PSO
         Y = Yi
         direction = np.sign(X_distance)
         count = 0
@@ -292,9 +323,19 @@ class Hexapod:
             count += 1
             Y = Y + Y_step
             X = final
-        self.command_queue.commands.pso.psooutputoff("ST1") # Turn off PSO 
+        self.command_queue.commands.pso.psooutputoff('ST1') # Turn off PSO 
         self.command_queue.commands.advanced_motion.velocityblendingoff()
 
+    def check_task_status(self):
+        if self.controller.runtime.tasks[2].status.error == 57000:
+            print("There was 57000 error on Task2. Resetting the controller")
+            self.controller.reset()
+            print("Reset done. All axes will be enabled.")
+            self.enable_all_axes()
+            print("All enabled. Will put WorkMode on, which will home all axes. This may take a while.")
+            self.enable_work()
+        else:
+            print("Task2 is good to go.")
     def run_traj(self, axis="X",  wait=True):
         '''Issue a PSO motion command to the hexapod.
         This will move the hexapod to the specified X, Y, Z coordinates
@@ -317,4 +358,4 @@ class Hexapod:
             self.command_queue.wait_for_empty()
 
     def turn_off_pso(self):
-        self.controller.runtime.commands.pso.psooutputoff("ST1") # Turn off PSO 
+        self.controller.runtime.commands.pso.psooutputoff('ST1') # Turn off PSO 
