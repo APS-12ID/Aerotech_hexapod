@@ -169,6 +169,9 @@ class Hexapod:
             if axisname in self.axes:
                 ax.motion.defaultaxisspeed.value = val
 
+    def toolmodeon(self, tool="Tool1"):
+        self.controller.runtime.commmmands.
+        
     def fly_abort(self):
         
         # At this time, end the command queue.
