@@ -6,8 +6,8 @@ import time
 IP = "at-hex-12id.xray.aps.anl.gov"
 BASEPV = '12idhxpAT'
 HOST = "at-hex-12id.xray.aps.anl.gov"
-period = 0.000_01  # Default period for PSO in seconds
-pulse_width = 0.000_01  # Default pulse width in seconds
+period = 0.000_1  # Default period for PSO in seconds
+pulse_width = 0.000_1  # Default pulse width in seconds
 step_distance = 0.01  # Default distance for PSO in mm
 
 class Hexapod:
@@ -234,24 +234,29 @@ class Hexapod:
         countsperunit = self.controller.runtime.parameters.axes[axis].units.countsperunit.value
         #self.controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(ST1,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
         # In a given period (period), 1 pulse will be generated with a width of pulse_width.
-        print(countsperunit*distance, 'pulse period')
-        self.controller.runtime.commands.pso.psodistanceconfigurefixeddistance('ST1', round(countsperunit*distance))
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('ST1', period*1_000_000) # usec total time
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('ST1', pulse_width*1_000_000) # usec
+        pulse_distance = round(countsperunit*step_distance)
+        period_us = period*1_000_000
+        pulsewidth_us = pulse_width*1_000_000
+        print(pulse_distance, ' pulse distance ', pulsewidth_us, ' period')
+
+        self.controller.runtime.commands.pso.psodistanceconfigurefixeddistance('ST1', pulse_distance)
+        self.controller.runtime.commands.pso.psowaveformconfiguremode('ST1', a1.PsoWaveformMode.Pulse)
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('ST1', period_us) # usec total time
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('ST1', pulsewidth_us) # usec
         self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount('ST1', 1) # 1 pulse (period) per event
-        
+        self.controller.runtime.commands.pso.psowaveformapplypulseconfiguration('ST1')# Applies the previous pulse configuration
         #Npulses = int(self.scantime/(period*0.001))
         #self.pulse_positions_index = 
 
     def goto_start_pos(self, axis='X'):
         default_speed = 5
         # turn off pso
-        self.command_queue.commands.pso.psodistanceeventsoff('ST1')
+        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1')
         #global motor_dict
         self.controller.runtime.commands.motion.moveabsolute(axis, [self.start_pos], speeds=[default_speed]) # Move axis to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
 
-    def set_traj(self, axis = "X", time=5, start = 0, final=1, step_distance=0.01):
+    def set_traj(self, axis = "X", time=5, start = 0, final=5, step_distance=0.01):
         # position units : mm
         #final = start + distance
                 # Begin a new command queue on task 1.
@@ -277,7 +282,7 @@ class Hexapod:
         self.command_queue.commands.motion.waitformotiondone(axis)
         self.command_queue.commands.pso.psooutputoff('ST1') # Turn off PSO 
         self.command_queue.commands.advanced_motion.velocityblendingoff()
-
+        
         self.set_pulses(distance = step_distance, period=period, pulse_width=pulse_width)
         self.pulse_number = N_pulses
         self.pulse_step = time/N_pulses # pulse time step in seconds
@@ -339,6 +344,7 @@ class Hexapod:
             self.enable_work()
         else:
             print("Task2 is good to go.")
+
     def run_traj(self, axis="X",  wait=True):
         '''Issue a PSO motion command to the hexapod.
         This will move the hexapod to the specified X, Y, Z coordinates
@@ -362,3 +368,46 @@ class Hexapod:
 
     def turn_off_pso(self):
         self.controller.runtime.commands.pso.psooutputoff('ST1') # Turn off PSO 
+
+    def test(self):
+
+        self.enable_work()
+        axis = 'X'
+        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1')
+        self.controller.runtime.commands.motion.moveabsolute(axis, [0], speeds=[5]) # Move axis to the specified position
+        self.controller.runtime.commands.motion.waitformotiondone(axis)
+
+        self.controller.runtime.commands.device.drivepulsestreamoff('ST1') # ST1 is the real axis issuing PSO firing pulses
+        #self.controller.runtime.commands.execute('DrivePulseStreamConfigure(ST1, [X, Y, Z], [1.0, 1.0, 1.0])') # X/Y/Z are the virtual axes being tracked. ST1 actually fires PSO, scale is 1.0
+        self.controller.runtime.commands.device.drivepulsestreamon('ST1') # Turns on ST1's pulse stream input
+
+        self.controller.runtime.commands.pso.psoreset('ST1') #Reset all PSO configuration
+        self.controller.runtime.commands.pso.psodistanceconfigureinputs('ST1', [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
+
+        final = -5
+        start = 0
+        N_pulses = int(abs(final - start) / step_distance)  # Calculate the number of pulses to fire
+        speed = 1
+        countsperunit = self.controller.runtime.parameters.axes[axis].units.countsperunit.value
+        #self.controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(ST1,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
+        # In a given period (period), 1 pulse will be generated with a width of pulse_width.
+        pulse_distance = round(countsperunit*step_distance)
+        period_us = period*1_000_000
+        pulsewidth_us = pulse_width*1_000_000
+        print(pulse_distance, ' pulse distance ', pulsewidth_us, ' period')
+
+        self.controller.runtime.commands.pso.psodistanceconfigurefixeddistance('ST1', pulse_distance)
+        self.controller.runtime.commands.pso.psowaveformconfiguremode('ST1', a1.PsoWaveformMode.Pulse)
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('ST1', period_us) # usec total time
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('ST1', pulsewidth_us) # usec
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount('ST1', 1) # 1 pulse (period) per event
+        self.controller.runtime.commands.pso.psowaveformapplypulseconfiguration('ST1')# Applies the previous pulse configuration
+        self.controller.runtime.commands.pso.psooutputconfigureoutput('ST1', a1.PsoOutputPin.XR3PsoOutput1)
+        self.controller.runtime.commands.pso.psooutputconfiguresource('ST1', a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
+        self.controller.runtime.commands.pso.psowaveformon('ST1') # Turn on waveform generator
+        self.controller.runtime.commands.pso.psodistancecounteron('ST1') # Enable the distance counter
+        self.controller.runtime.commands.pso.psodistanceeventson('ST1') # Turn on PSO
+        self.controller.runtime.commands.motion.moveabsolute(axis, [final], [speed]) # Move ST1 to the specified position
+        self.controller.runtime.commands.motion.waitformotiondone(axis)
+        self.controller.runtime.commands.pso.psooutputoff('ST1') # Turn off PSO 
+        
