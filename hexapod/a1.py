@@ -224,15 +224,18 @@ class Hexapod:
         self.controller.runtime.commands.pso.psowaveformon('ST1') # Turn on waveform generator
         self.controller.runtime.commands.pso.psodistancecounteron('ST1') # Enable the distance counter
 
-    def set_pulses(self, distance = step_distance, period=period, pulse_width=pulse_width):
+    def set_pulses(self, axis = 'X', distance = step_distance, period=period, pulse_width=pulse_width):
         # step_distance : mm
         # period : sec
         # pulse_width : sec
         '''Configure the hexapod for part-speed operation using PSO.'''
         '''period : Periodicity of pulses generated at each distance, us units. When only one pulse is generated, this does not matter'''
         '''Pulse_width : us units'''
-        self.controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(ST1,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
+        countsperunit = self.controller.runtime.parameters.axes[axis].units.countsperunit.value
+        #self.controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(ST1,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
         # In a given period (period), 1 pulse will be generated with a width of pulse_width.
+        print(countsperunit*distance, 'pulse period')
+        self.controller.runtime.commands.pso.psodistanceconfigurefixeddistance('ST1', round(countsperunit*distance))
         self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('ST1', period*1_000_000) # usec total time
         self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('ST1', pulse_width*1_000_000) # usec
         self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount('ST1', 1) # 1 pulse (period) per event
