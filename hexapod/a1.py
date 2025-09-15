@@ -9,7 +9,7 @@ HOST = "at-hex-12id.xray.aps.anl.gov"
 period = 0.000_1  # Default period for PSO in seconds
 pulse_width = 0.000_1  # Default pulse width in seconds
 step_distance = 0.01  # Default distance for PSO in mm
-sampling_freq = 100 # 100Hz 
+sampling_freq = 1000 # 100Hz 
 class Hexapod:
     """A class to use pipython"""
     step_distance = step_distance
@@ -447,7 +447,7 @@ class Hexapod:
 
         # data collection started
         if wait:
-            num_datapoints = int(sampling_freq/time_per_line*N_lines)
+            num_datapoints = int(sampling_freq*time_per_line*N_lines)
             print(f"Number of data collection points is {num_datapoints}")
             data_config = self.set_datacollection(axis, num_datapoints)
             self.controller.runtime.data_collection.start(a1.DataCollectionMode.Snapshot, data_config)
