@@ -71,6 +71,8 @@ class Hexapod:
         return pos
     
     def mv(self, **kwargs):
+        # Move to absolute position. Speed is set to 10 mm/s
+        # Example: mv(X=1, Y=2)
         for key, value in kwargs.items():
             if key in self.axes:
                 self.controller.runtime.commands.motion.moveabsolute(key, [value], [10])
@@ -144,13 +146,13 @@ class Hexapod:
 
     def isattarget(self, axis=""):
         st = self.get_status()
-        if len(axis)>0:
+        if len(axis)==1:
             return st[axis]['inposition']
         axis = self.axes
-        status = []
+        status = {}
         for ax in axis:
             if ax in st.keys():
-                status.append(st[ax]['inposition'])
+                status[ax] = st[ax]['inposition']
         return status
 
     def get_speed(self, axis = ""):
@@ -454,7 +456,6 @@ class Hexapod:
 
         if type(self.command_queue) ==type(None):
             if self.controller.runtime.tasks[3].status.task_state == a1.TaskState.QueueRunning or a1.TaskState.QueuePaused:
-                print('Paused')
                 self.controller.runtime.tasks[3].program.stop()
         try:
             self.command_queue = self.controller.runtime.commands.begin_command_queue("Task 3", 1000, True)
@@ -528,6 +529,37 @@ class Hexapod:
             self.controller.runtime.commands.motion.waitformotiondone(self.scan_axes)
             #results = self.controller.runtime.data_collection.get_results(data_config, num_datapoints)
             #return results
+
+    def make_stepscan_arrays(self, Xi = -2.5, Xf=2.5, X_step = 0.1, Yi = 0, Yf = 1, Y_step = 0.1):
+        xpos_all = np.array([])
+        ypos_all = np.array([])
+        for stepN in range(int((Yf-Yi)/Y_step)+1):
+            print(stepN, stepN%2)
+            if stepN%2 ==0:
+                xpos = np.arange(Xi, Xf+X_step, X_step)
+            else:
+                xpos = np.arange(Xf, Xi-X_step, -X_step)
+            Y = Yi + Y_step*stepN
+            ypos = np.full(xpos.shape, Y)
+            xpos_all = np.concatenate((xpos_all, xpos))
+            ypos_all = np.concatenate((ypos_all, ypos))
+        return xpos_all, ypos_all
+    
+    def step_scan_SNAKE(self, Xi, Xf, X_step, Yi, Yf, Y_step, exptime):
+        xp, yp = self.make_stepscan_arrays(Xi, Xf, X_step, Yi, Yf, Y_step)
+        for x, y in zip(xp, yp):
+            self.mv(X=x, Z=y)
+            status = False
+            while not status:
+                time.sleep(0.01)
+                try:
+                    state = self.isattarget(['X', 'Z'])
+                    status = state['X'] and state['Z']
+                except:
+                    status = False
+                time.sleep(0.01)
+            print(f"At X={x:.3f}, Z={y:.3f}, wait for {exptime} seconds.")
+            time.sleep(exptime)
 
     def set_datacollection(self, axis, num_points = 1000):
         frequency = a1.DataCollectionFrequency.Frequency1kHz
