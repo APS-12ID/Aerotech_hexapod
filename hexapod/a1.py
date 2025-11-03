@@ -596,3 +596,14 @@ class Hexapod:
             poserr.append(pos_err)
         #Storing the time array collected from the controller
         return pos, posfb, poserr
+
+def list_servo_paramters(controller):
+    for i, ax in enumerate(controller.runtime.parameters.axes):
+        axisname = ax.identification.axisname.value
+        print(f"Axis {i}: {axisname}")
+        print("  Servo Parameters:")
+        for param in ax.servo.__dict__.keys():
+            if "_" not in param:
+                value = getattr(ax.servo, param).value
+                print(f"    {param}: {value}")
+        print("")
