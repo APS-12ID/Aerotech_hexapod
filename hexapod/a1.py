@@ -172,7 +172,11 @@ class Hexapod:
         for i, ax in enumerate(self.controller.runtime.parameters.axes):
             axisname = ax.identification.axisname.value
             if axisname in self.axes:
-                ax.motion.defaultaxisspeed.value = val
+                if type(val) == list:
+                    ax.motion.defaultaxisspeed.value = val[i]
+                else:
+                    ax.motion.defaultaxisspeed.value = val
+
     def enable_all_axes(self):
         self.controller.runtime.commands.motion.enable([0, 1,2,3,4,5,6,7,8,9,10,11])
 
@@ -499,8 +503,8 @@ class Hexapod:
                 if Y_step < 0:
                     iscw = not iscw
                 center = [0, Y_step/2] # relative offsets, https://help.aerotech.com/automation1/Content/Concepts/Motion-Functions.htm?Highlight=moveccw
-                #print(f"This is center {center}")
-                #print(f"Circular move from {[Xf, Y]} to [{Xf}, {Y+Y_step}]")
+#                print(f"This is center {center}")
+#                print(f"Circular move from {[Xf, Y]} to [{Xf}, {Y+Y_step}]")
                 if abs(Y-yf)>abs(Y_step)*0.1:
                     if iscw:
                         self.command_queue.commands.motion.movecwbycenter(axis, [0, Y_step], center, speed)
