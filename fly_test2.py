@@ -27,16 +27,17 @@ def main(testequip = "Aerotech", isstepscan = True):
     from tools.softglue import sgz_pty, SG, SOFTGLUE_Setup_Error
     from tools import struck
 
-    #Delay generator
-    import tools.dg645 as dg645
-    from tools.dg645 import DG645_Error
-    try:
-        dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
-    except:
-        print("failed to connect DG645. Will not be able to collect detector images")
+#    #Delay generator
+#    import tools.dg645 as dg645
+#    from tools.dg645 import DG645_Error
+#    try:
+#        dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
+#    except:
+#        print("failed to connect DG645. Will not be able to collect detector images")
 
-    dg645_12ID.set_pilatus_fly(60, trigger_source=0)
-    dg645_12ID.trigger()
+    #dg645_12ID.set_pilatus_fly(60, trigger_source=0)
+    #dg645_12ID.trigger()
+    epics.caput("12IFMZ:SG:OR-1_IN1_Signal", "1")
     s12softglue = sgz_pty()
     basename = '12idSGSocket:'
 
@@ -52,7 +53,6 @@ def main(testequip = "Aerotech", isstepscan = True):
     #struck.mcs_init()
     #struck.mcs_ready(5000, 100)
     #struck.arm_mcs()
-
     if testequip == "Aerotech":
         ## Aerotech
         # #hp.set_traj(axis=['X', 'Z'], start=[0,0], final=[1, 1], Y_step = 0.05, time_per_line=1, pulse_step = 0.05, wait=True)
@@ -89,6 +89,7 @@ def main(testequip = "Aerotech", isstepscan = True):
 
     det.FileCaptureOff()
     det.Acquire = 0
+    epics.caput("12IFMZ:SG:OR-1_IN1_Signal", "0")
 
 
 if len(sys.argv) <= 1:
