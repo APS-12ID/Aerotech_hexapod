@@ -601,13 +601,74 @@ class Hexapod:
         #Storing the time array collected from the controller
         return pos, posfb, poserr
 
-def list_servo_paramters(controller):
+def save_servo_paramters(controller):
     for i, ax in enumerate(controller.runtime.parameters.axes):
+        axisname = ax.identification.axisname.value
+        if i>0:
+            continue
+        print(f"Axis {i}: {axisname}")
+        print("  Servo Parameters:")
+        for param in ax.servo.__dict__.keys():
+            #if "_" not in param:
+            # if param.startswith("_"):
+            #     continue
+            try:
+                value = getattr(ax.servo, param).value
+            except Exception:
+                try:
+                    value = getattr(ax.servo, param)
+                except Exception:
+                    value = None
+            filename = f"servo_params_{axisname}.txt"
+            with open(filename, "a") as fh:
+                fh.write(f"{param} : {value}\n")
+        print("")
+
+
+#def load_servo_paramters(controller, filename="servo_params_ST1.txt"):
+    
+
+def set_servo_paramters(controller):
+    conf = controller.configuration.parameters.get_configuration()
+    for i, ax in enumerate(conf.axes):
+        #sv = ax.servo
+        if i==0:
+            continue
+        if i>5:
+            continue
         axisname = ax.identification.axisname.value
         print(f"Axis {i}: {axisname}")
         print("  Servo Parameters:")
         for param in ax.servo.__dict__.keys():
-            if "_" not in param:
-                value = getattr(ax.servo, param).value
+            #if "_" not in param:
+            value = getattr(ax.servo, param).value
+            val0 = getattr(conf.axes[0].servo, param).value
+            #parts = param.split('__')
+            #attr = parts[-1]
+            if val0 != value:
+                try:
+                    getattr(ax.servo, param).value = val0
+                except Exception as e:
+                    print(f"Could not set {param}: {e}")
+                print(f"    {param}: {value} changed to {val0}")
+        print("")        
+    controller.configuration.parameters.set_configuration(conf)
+
+def list_servo_paramters(controller):
+    conf = controller.configuration.parameters.get_configuration()
+    for i, ax in enumerate(conf.axes):
+        #sv = ax.servo
+        if i==0:
+            continue
+        if i>5:
+            continue
+        axisname = ax.identification.axisname.value
+        print(f"Axis {i}: {axisname}")
+        print("  Servo Parameters:")
+        for param in ax.servo.__dict__.keys():
+            #if "_" not in param:
+            value = getattr(ax.servo, param).value
+            val0 = getattr(conf.axes[0].servo, param).value
+            if val0 != value:
                 print(f"    {param}: {value}")
         print("")

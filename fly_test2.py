@@ -6,6 +6,8 @@ def main(testequip = "Aerotech", isstepscan = True):
     if testequip == "Aerotech":
         from hexapod import Hexapod, IP
         hp = Hexapod(IP)
+        hp.enable_all_axes()
+        hp.enable_tool()
         hp.fly_conf()
         hp.set_pulsestream()
         #hp.enable_tool()
@@ -37,7 +39,8 @@ def main(testequip = "Aerotech", isstepscan = True):
 
     #dg645_12ID.set_pilatus_fly(60, trigger_source=0)
     #dg645_12ID.trigger()
-    epics.caput("12IFMZ:SG:OR-1_IN1_Signal", "1")
+    epics.caput("12IFMZ:SG:AND-3_IN1_Signal", "1")
+    epics.caput("12IFMZ:SG:AND-4_IN1_Signal", "1")
     s12softglue = sgz_pty()
     basename = '12idSGSocket:'
 
@@ -47,7 +50,10 @@ def main(testequip = "Aerotech", isstepscan = True):
     det = SG(basename)
     s12softglue.set_count_freq(10)
     #s12softglue.ckTime_reset()
-    s12softglue.memory_clear()
+    try:
+        s12softglue.memory_clear()
+    except:
+        pass
 
 
     #struck.mcs_init()
@@ -89,7 +95,9 @@ def main(testequip = "Aerotech", isstepscan = True):
 
     det.FileCaptureOff()
     det.Acquire = 0
-    epics.caput("12IFMZ:SG:OR-1_IN1_Signal", "0")
+    epics.caput("12IFMZ:SG:AND-3_IN1_Signal", "trig_out")
+    epics.caput("12IFMZ:SG:AND-4_IN1_Signal", "trig_out")
+    
 
 
 if len(sys.argv) <= 1:
