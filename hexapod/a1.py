@@ -184,6 +184,7 @@ class Hexapod:
     def disable_all_axes(self):
         self.controller.runtime.commands.motion.disable([0, 1,2,3,4,5,6,7,8,9,10,11])
 
+    # This define the work coordinate system with offsets from the base coordinate system.
     def set_work(self, xoff=0, yoff=0, zoff=0, aoff=0, boff=0, coff=0):
         # disable the real-time hexapod kinematics. 
         ''' After you issue the DisableHexapod() library function, you get full control of each strut. Strut axes are
@@ -196,16 +197,24 @@ class Hexapod:
     def enable_work(self):
         self.controller.runtime.commands.execute("EnableWork()")
 
+    # This define the tool coordinate system with offsets from the platform center which is [0, 0, 230.25, 0, 0, 0] from base
     def set_tool(self, tool="Tool1", xoff=0, yoff=0, zoff=0, aoff=0, boff=0, coff=0):
         self.controller.runtime.commands.execute("DisableHexapod()")
         cmd = f'SetToolPoint(1, "{tool}", {xoff},{yoff},{zoff},{aoff},{boff},{coff})'
         self.controller.runtime.commands.execute(cmd)
         cmd = f'ActivateTool("{tool}")'
         self.controller.runtime.commands.execute(cmd)
-        self.controller.runtime.commands.motion_setup.setuptasktargetmode(a1.TargetMode.Absolute)
+        #self.controller.runtime.commands.motion_setup.setuptasktargetmode(a1.TargetMode.Absolute)
     
+    # set the current position as [0, 0, 0, 0, 0, 0] in tool coordinate system
     def enable_tool(self):
         self.controller.runtime.commands.execute("EnableTool()")
+
+    # move in tool coordinate system or work coordinate system to a target position
+    # then, run this to set the current position as zero
+    def set_current_as_zero(self):
+        self.enable_work()
+        self.enable_tool()
 
     def fly_abort(self):
         
@@ -240,93 +249,6 @@ class Hexapod:
         self.controller.runtime.commands.motion.moveabsolute(axis, [self.start_pos], speeds=[default_speed]) # Move axis to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
 
-    # def set_traj(self, axis = "X", time=5, start = 0, final=5, step_distance=0.01):
-    #     self.start_pos = start
-    #     self.goto_start_pos(axis)
-
-    #     N_pulses = int(abs(final - start) / step_distance)  # Calculate the number of pulses to fire
-    #     speed = abs(final-start)/time
-    #     print(f"Fly to {final} in {time} seconds with {speed} mm/s.") 
-    #     print(f"PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
-
-    #     self.set_pulses(distance = step_distance, period=period, pulse_width=pulse_width)
-    #     self.pulse_number = N_pulses
-    #     self.pulse_step = time/N_pulses # pulse time step in seconds
-    #     self.scantime = time
-
-
-    #     self.controller.runtime.commands.pso.psowaveformon('ST1') # Turn on waveform generator
-    #     self.controller.runtime.commands.pso.psodistancecounteron('ST1') # Enable the distance counter
-
-
-    #     # position units : mm
-    #     #final = start + distance
-    #             # Begin a new command queue on task 1.
-    #     if type(self.command_queue) ==type(None):
-    #         if self.controller.runtime.tasks[3].status.task_state == a1.TaskState.QueueRunning:
-    #             self.controller.runtime.tasks[3].program.stop()
-    #             print("Task 3 was in QueueRunning mode. It is stopped and QueueRunning restarted.")
-    #         self.command_queue = self.controller.runtime.commands.begin_command_queue("Task 3", 10, True)
-        
-    #     if not self.command_queue.status.is_paused:
-    #         # First, pause the command queue so you can add all the commands
-    #         # before they are executed.
-    #         self.command_queue.pause()
-
-    #     # Add all the AeroScript commands that you want to execute.
-    #     #self.command_queue.commands.advanced_motion.velocityblendingon()
-    #     self.command_queue.commands.pso.psodistanceeventson('ST1') # Turn on PSO
-    #     self.command_queue.commands.motion.moveabsolute(axis, [final], [speed]) # Move ST1 to the specified position
-    #     self.command_queue.commands.motion.waitformotiondone(axis)
-    #     #self.command_queue.commands.pso.psooutputoff('ST1') # Turn off PSO 
-    #     #self.command_queue.commands.advanced_motion.velocityblendingoff()
-        
-
-    # def set_traj_SNAKE(self, time_per_line = 5, Xi = -2.5, X_distance=1, Yi = 0, Yf = 1, Y_step = 0.1, pulse_step=0.1):
-    #     if type(self.command_queue) ==type(None):
-    #         if self.controller.runtime.tasks[3].status.task_state == a1.TaskState.QueueRunning:
-    #             self.controller.runtime.tasks[3].program.stop()
-    #             print("Task 3 was in QueueRunning mode. It is stopped and QueueRunning restarted.")
-    #         self.command_queue = self.controller.runtime.commands.begin_command_queue("Task 3", 10, True)
-        
-    #     if not self.command_queue.status.is_paused:
-    #         # First, pause the command queue so you can add all the commands
-    #         # before they are executed.
-    #         self.command_queue.pause()
-
-    #     # Add all the AeroScript commands that you want to execute.
-    #     self.command_queue.commands.advanced_motion.velocityblendingon()
-    #     N_pulses = int(abs(final - start) / step_distance)  # Calculate the number of pulses to fire
-    #     speed = abs(final-start)/time
-    #     print(f"Fly to {final} in {time} seconds with {speed} mm/s.") 
-    #     print(f"PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
-    #     self.command_queue.commands.pso.psodistanceeventson('ST1') # Turn on PSO
-    #     Y = Yi
-    #     direction = np.sign(X_distance)
-    #     count = 0
-    #     X = Xi
-    #     while Y <= Yf:
-    #         final = X + (-1)^count*X_distance
-    #         self.command_queue.commands.motion.moveabsolute(axis, [final], [speed]) # Move ST1 to the specified position
-    #         self.command_queue.commands.motion.waitformotiondone(axis)
-    #         iscw = True
-    #         # when Y direction is positive (up direction)
-    #         if final > X:
-    #             iscw = False
-    #         else:
-    #             iscw = True
-    #         # when Y direction is negative (down direction)
-    #         if Y_step < 0:
-    #             iscw = not iscw
-    #         center = [final, Y + Y_step/2]
-    #         self.command_queue.commands.motion.arcmove(["X", "Y"], [final, Y + Y_step], center, speed)
-    #         self.command_queue.commands.motion.waitformotiondone(["X", "Y"])
-    #         count += 1
-    #         Y = Y + Y_step
-    #         X = final
-    #     self.command_queue.commands.pso.psooutputoff('ST1') # Turn off PSO 
-    #     self.command_queue.commands.advanced_motion.velocityblendingoff()
-
     def check_task_status(self):
         if self.controller.runtime.tasks[2].status.error == 57000:
             print("There was 57000 error on Task2. Resetting the controller")
@@ -338,36 +260,10 @@ class Hexapod:
         else:
             print("Task2 is good to go.")
 
-    # def run_traj(self, axis="X",  wait=True):
-    #     '''Issue a PSO motion command to the hexapod.
-    #     This will move the hexapod to the specified X, Y, Z coordinates
-    #     using the configured PSO settings.
-    #     '''
-
-    #     # Resume the command queue so that all the commands that you added start
-    #     # to execute.
-    #     self.command_queue.resume()
-    #     #     # Here you can do other things such as more process, get status, etc.
-    #     #     # You can do these things because the command queue is executing
-    #     #     # commands on the controller and is not blocking your code execution.
-    #     if wait:
-    #         # Here you wait to make sure that the command queue executes all the commands.
-    #         # You must do this before you end the command queue.
-    #         # When you end the command queue, this process aborts all motion and commands.
-    # #        print("Waiting to be done.")
-    #         self.controller.runtime.commands.motion.waitformotiondone(axis)
-    #         self.command_queue.wait_for_empty()
-
     def turn_off_pso(self):
         self.controller.runtime.commands.pso.psooutputoff('ST1') # Turn off PSO 
 
     def set_pulse(self, axis = 'X', step_distance=0, period=0, pulse_width = 0):
-
-        #self.enable_work()
-#        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1')
-#        self.controller.runtime.commands.motion.moveabsolute(axis, [0], speeds=[5]) # Move axis to the specified position
-#        self.controller.runtime.commands.motion.waitformotiondone(axis)
-
         if step_distance != 0:
             self.step_distance = step_distance
         if period != 0:
