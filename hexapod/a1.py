@@ -2,6 +2,7 @@ import automation1 as a1
 import threading
 import numpy as np
 import time
+import ast
 
 IP = "at-hex-12id.xray.aps.anl.gov"
 BASEPV = '12idhxpAT'
@@ -625,15 +626,63 @@ def save_servo_paramters(controller):
         print("")
 
 
-#def load_servo_paramters(controller, filename="servo_params_ST1.txt"):
-    
+def load_servo_paramters(controller, filename="servo_params_ST1_normal.txt"):
+    """
+    Load servo parameters from a file produced by save_servo_paramters into a dict.
+    Returns: dict mapping parameter name -> parsed Python value.
+    """
 
-def set_servo_paramters(controller):
+    params = {}
+    try:
+        with open(filename, "r") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" not in line:
+                    continue
+                key, val = line.split(":", 1)
+                key = key.strip()
+                val = val.strip()
+                # Try a safe literal eval first (handles numbers, lists, tuples, booleans if written as True/False, quoted strings)
+                parsed = None
+                try:
+                    parsed = ast.literal_eval(val)
+                except Exception:
+                    # Fallbacks for common unquoted forms
+                    low = val.lower()
+                    if low in ("none", "null"):
+                        parsed = None
+                    elif low in ("true", "false"):
+                        parsed = low == "true"
+                    else:
+                        # try int then float, else keep raw string
+                        try:
+                            parsed = int(val)
+                        except Exception:
+                            try:
+                                parsed = float(val)
+                            except Exception:
+                                parsed = val
+                params[key] = parsed
+    except FileNotFoundError:
+        print(f"File not found: {filename}")
+    except Exception as e:
+        print(f"Error reading {filename}: {e}")
+    return params
+
+def set_servo_paramters(controller, filename = ''):
+    isInputAvailable = False
+    if len(filename)>1:
+        params = load_servo_paramters(controller, filename)
+        isInputAvailable = True
     conf = controller.configuration.parameters.get_configuration()
     for i, ax in enumerate(conf.axes):
         #sv = ax.servo
-        if i==0:
-            continue
+        # if no input, read params from ST1 and set them to other axes
+        if isInputAvailable:
+            if i==0:
+                continue
         if i>5:
             continue
         axisname = ax.identification.axisname.value
@@ -642,7 +691,10 @@ def set_servo_paramters(controller):
         for param in ax.servo.__dict__.keys():
             #if "_" not in param:
             value = getattr(ax.servo, param).value
-            val0 = getattr(conf.axes[0].servo, param).value
+            if isInputAvailable:
+                val0 = params[param]
+            else:
+                val0 = getattr(conf.axes[0].servo, param).value
             #parts = param.split('__')
             #attr = parts[-1]
             if val0 != value:
