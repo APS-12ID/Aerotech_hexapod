@@ -606,8 +606,8 @@ def list_servo_paramters(controller):
     conf = controller.configuration.parameters.get_configuration()
     for i, ax in enumerate(conf.axes):
         #sv = ax.servo
-        if i==0:
-            continue
+        #if i==0:
+        #    continue
         if i>5:
             continue
         axisname = ax.identification.axisname.value
@@ -616,7 +616,10 @@ def list_servo_paramters(controller):
         for param in ax.servo.__dict__.keys():
             #if "_" not in param:
             value = getattr(ax.servo, param).value
-            val0 = getattr(conf.axes[0].servo, param).value
-            if val0 != value:
+            if i>0:
+                val0 = getattr(conf.axes[0].servo, param).value
+                if val0 != value:
+                    print(f"    {param}: {value}")
+            else:
                 print(f"    {param}: {value}")
         print("")
