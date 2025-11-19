@@ -576,7 +576,7 @@ def set_servo_paramters(controller, filename = ''):
     for i, ax in enumerate(conf.axes):
         #sv = ax.servo
         # if no input, read params from ST1 and set them to other axes
-        if isInputAvailable:
+        if not isInputAvailable:
             if i==0:
                 continue
         if i>5:
