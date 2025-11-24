@@ -36,6 +36,10 @@ class Hexapod:
         #self.mycs = UserCS
         self.axes = ['X', 'Y', 'Z', 'A', 'B', 'C']
         self.wave_start = {'X':0, 'Y':0, 'Z':0, 'U':0, 'V':0, 'W':0}
+        # position of the platform center in base coordinate system
+        self.work_offset = [0, 0, 230.25, 0, 0, 0]
+        # position of the tool center from the default platform center
+        self.tool_offset = [0, 0, 0, 0, 0, 0]
         self.lock = threading.Lock()
         self.command_queue = None
     
@@ -180,6 +184,7 @@ class Hexapod:
 
     def enable_all_axes(self):
         self.controller.runtime.commands.motion.enable([0, 1,2,3,4,5,6,7,8,9,10,11])
+        self.enable_work()
 
     def disable_all_axes(self):
         self.controller.runtime.commands.motion.disable([0, 1,2,3,4,5,6,7,8,9,10,11])
@@ -212,8 +217,12 @@ class Hexapod:
 
     # move in tool coordinate system or work coordinate system to a target position
     # then, run this to set the current position as zero
+    # This is useful when you do a grazing incident experiment.
     def set_current_as_zero(self):
         self.enable_work()
+        pos = self.get_pos()
+        for p in range(len(pos)):
+            self.tool_offset[p] = pos[p] - self.work_offset[p]
         self.enable_tool()
 
     def fly_abort(self):
