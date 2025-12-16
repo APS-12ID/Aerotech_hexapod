@@ -215,6 +215,9 @@ class Hexapod:
         self.controller.runtime.commands.execute(cmd)
         #self.controller.runtime.commands.motion_setup.setuptasktargetmode(a1.TargetMode.Absolute)
     
+    def acknowledgeall(self):
+        self.controller.runtime.commands.fault_and_error.acknowledgeall()
+        
     # set the current position as [0, 0, 0, 0, 0, 0] in tool coordinate system
     def enable_tool(self):
         self.controller.runtime.commands.execute("EnableTool()")
