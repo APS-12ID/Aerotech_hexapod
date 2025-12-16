@@ -60,6 +60,10 @@ class Hexapod:
                 continue
             self.axes.append(ax.identification.axisname.value)
 
+    def home_all(self):
+        self.controller.runtime.commands.execute("DisableHexapod()")
+        self.controller.runtime.commands.motion.home([0, 1,2,3,4,5])
+
     def get_pos(self):
         # DriveStatus is a series of bits that can be masked. You will use it to get the axis "enabled" bit.
         # AxisStatus is a series of bits that can be masked. You will use it to get the axis "homed" bit.
@@ -214,7 +218,12 @@ class Hexapod:
     # set the current position as [0, 0, 0, 0, 0, 0] in tool coordinate system
     def enable_tool(self):
         self.controller.runtime.commands.execute("EnableTool()")
-
+    
+    def activate_tool(self, tool='tool1'):
+        self.controller.runtime.commands.execute("DisableHexapod()")
+        cmd = f'ActivateTool("{tool}")'
+        self.controller.runtime.commands.execute(cmd)
+        
     # move in tool coordinate system or work coordinate system to a target position
     # then, run this to set the current position as zero
     # This is useful when you do a grazing incident experiment.
