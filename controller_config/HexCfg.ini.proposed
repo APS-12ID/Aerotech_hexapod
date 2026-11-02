@@ -1,0 +1,100 @@
+; Merged for the HexCLibrary state machine, which reads this file at controller startup.
+; [SystemSettings] and [HexapodSettings.*] from HexConfig.ini;
+; hexapod model sections from the previous HexCfg.ini (they include ScrewLead and CorrectionFileName).
+
+[SystemSettings]
+iGlobalOffset = 0
+rGlobalOffset = 0
+sGlobalOffset = 0
+
+[HexapodSettings.1]
+HexapodModel = HEX300-230HL
+Task = 1
+ax_X = X
+ax_Y = Y
+ax_Z = Z
+ax_A = A
+ax_B = B
+ax_C = C
+
+CorrectionFileName = 639747-1-KPMeasurements.txt
+
+[HexapodSettings.2]
+HexapodModel = 
+Task = 1
+ax_X = x
+ax_Y = y
+ax_Z = z
+ax_A = a
+ax_B = b
+ax_C = c
+
+CorrectionFileName = 
+
+[HEX500-350HL]
+BasePivotRadius = 213.814 
+PlatformPivotRadius = 143.504
+BasePivotAngleSeparation = 20.20
+PlatformPivotAngleSeparation = 25.38  
+NomPivotInterfaceStrutLength = 226.330
+BaseToPlatformPivotOffset = 277.911 
+BasePivotHeight = 35  
+PlatformPivotToMountingSurface = 37.089 
+StrutTravel = 50.2
+JointType=Spherical
+LinearConstraint=true
+JointAngleTangent=false
+ScrewLead = 1
+CorrectionFileName =
+
+ 
+
+[HEX300-230HL]
+BasePivotRadius = 130.1790
+PlatformPivotRadius = 105.920
+BasePivotAngleSeparation = 25.0
+PlatformPivotAngleSeparation = 20
+NomPivotInterfaceStrutLength = 114.44788
+BaseToPlatformPivotOffset = 196.25
+BasePivotHeight = 17 
+PlatformPivotToMountingSurface = 17
+StrutTravel = 26.2
+BaseCrossLength = 11.25 
+PlatCrossLength = 11.25 
+JointType=DoubleCardan
+LinearConstraint=true
+JointAngleTangent=false
+ScrewLead = 1
+CorrectionFileName =639747-1-KPMeasurements.txt
+
+[HEX150-140HL]
+BasePivotRadius = 69
+PlatformPivotRadius = 58
+BasePivotAngleSeparation = 26.816
+PlatformPivotAngleSeparation = 32.027
+NomPivotInterfaceStrutLength = 123.5
+BaseToPlatformPivotOffset = 118.398
+BasePivotHeight = 11.3
+PlatformPivotToMountingSurface = 11.3
+StrutTravel = 16.5
+JointType=Spherical
+LinearConstraint=true
+JointAngleTangent=false
+ScrewLead = 1
+CorrectionFileName = 
+
+[HEX150-125HL]
+BasePivotRadius = 69
+PlatformPivotRadius = 58
+BasePivotAngleSeparation = 42
+PlatformPivotAngleSeparation = 32
+NomPivotInterfaceStrutLength = 97
+BaseToPlatformPivotOffset = 93.014627
+BasePivotHeight = 16.685373
+PlatformPivotToMountingSurface = 15.3
+StrutTravel = 16.9
+JointType=Spherical
+LinearConstraint=false
+JointAngleTangent=true
+ScrewLead = 1
+CorrectionFileName =

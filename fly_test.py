@@ -13,28 +13,28 @@ print("Connected to Automation1 controller.")
     # 2. Assign and enable the axis
 
 def set_pulsestream():
-    controller.runtime.commands.device.drivepulsestreamoff('ST1') # ST1 is the real axis issuing PSO firing pulses
-    controller.runtime.commands.execute('DrivePulseStreamConfigure(ST1, [X, Y, Z], [1.0, 1.0, 1.0])') # X/Y/Z are the virtual axes being tracked. ST1 actually fires PSO, scale is 1.0
-    controller.runtime.commands.device.drivepulsestreamon("ST1") # Turns on ST1's pulse stream input
+    controller.runtime.commands.device.drivepulsestreamoff('X') # X is the real axis issuing PSO firing pulses
+    controller.runtime.commands.execute('DrivePulseStreamConfigure(X, [X, Y, Z], [1.0, 1.0, 1.0])') # X/Y/Z are the virtual axes being tracked. X actually fires PSO, scale is 1.0
+    controller.runtime.commands.device.drivepulsestreamon("X") # Turns on X's pulse stream input
 
 def fly_conf():
-    controller.runtime.commands.pso.psoreset("ST1") #Reset all PSO configuration
-    controller.runtime.commands.pso.psodistanceconfigureinputs("ST1", [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
-    controller.runtime.commands.pso.psowaveformconfiguremode("ST1", a1.PsoWaveformMode.Pulse)
-    controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount("ST1", 1) # 1 pulse (period) per event
-    #controller.runtime.commands.pso.psowaveformapplypulseconfiguration("ST1")# Applies the previous pulse configuration
-    controller.runtime.commands.pso.psowaveformon("ST1") # Turn on waveform generator
-    controller.runtime.commands.pso.psooutputconfiguresource("ST1", a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
-    controller.runtime.commands.pso.psodistancecounteron("ST1") # Enable the distance counter
+    controller.runtime.commands.pso.psoreset("X") #Reset all PSO configuration
+    controller.runtime.commands.pso.psodistanceconfigureinputs("X", [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
+    controller.runtime.commands.pso.psowaveformconfiguremode("X", a1.PsoWaveformMode.Pulse)
+    controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount("X", 1) # 1 pulse (period) per event
+    #controller.runtime.commands.pso.psowaveformapplypulseconfiguration("X")# Applies the previous pulse configuration
+    controller.runtime.commands.pso.psowaveformon("X") # Turn on waveform generator
+    controller.runtime.commands.pso.psooutputconfiguresource("X", a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
+    controller.runtime.commands.pso.psodistancecounteron("X") # Enable the distance counter
 
 def fly_set(distance = step_distance, period=period, pulse_width=pulse_width):
     '''Configure the hexapod for part-speed operation using PSO.'''
     '''Distance : um units'''
     '''period : Periodicity of pulses generated at each distance, us units. When only one pulse is generated, this does not matter'''
     '''Pulse_width : us units'''
-    controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(ST1,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
-    controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime("ST1", period)# 10 usec total time
-    controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime("ST1", pulse_width)
+    controller.runtime.commands.execute(f'PsoDistanceConfigureFixedDistance(X,Round(UnitsToCounts(X, {distance})))') # Fire every 0.01 user units (10 um)
+    controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime("X", period)# 10 usec total time
+    controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime("X", pulse_width)
 
 def fly_run(axis="X", start=0, final=1, time=5, wait=True):
     '''Issue a PSO motion command to the hexapod.
@@ -63,10 +63,10 @@ def fly_run(axis="X", start=0, final=1, time=5, wait=True):
     command_queue.commands.advanced_motion.velocityblendingon()
     N_pulses = int(abs(final - start) / step_distance)  # Calculate the number of pulses to fire
     print(f"Fly to {final} in {time} seconds. PSO generates pulses every {time/N_pulses} seconds and total {N_pulses} pulses.")
-    command_queue.commands.pso.psodistanceeventson("ST1") # Turn on PSO
-    command_queue.commands.motion.moveabsolute(axis, [final], [abs(final-start)/time]) # Move ST1 to the specified position
+    command_queue.commands.pso.psodistanceeventson("X") # Turn on PSO
+    command_queue.commands.motion.moveabsolute(axis, [final], [abs(final-start)/time]) # Move X to the specified position
     command_queue.commands.motion.waitformotiondone(axis)
-    command_queue.commands.pso.psooutputoff("ST1") # Turn off PSO 
+    command_queue.commands.pso.psooutputoff("X") # Turn off PSO 
     command_queue.commands.advanced_motion.velocityblendingoff()
 
     # Resume the command queue so that all the commands that you added start
@@ -84,7 +84,7 @@ def fly_run(axis="X", start=0, final=1, time=5, wait=True):
         command_queue.wait_for_empty()
 
 def turn_off_pso():
-    controller.runtime.commands.pso.psooutputoff("ST1") # Turn off PSO 
+    controller.runtime.commands.pso.psooutputoff("X") # Turn off PSO 
 
 def fly_abort():
     global command_queue

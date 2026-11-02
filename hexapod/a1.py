@@ -10,7 +10,16 @@ HOST = "at-hex-12id.xray.aps.anl.gov"
 period = 0.000_1  # Default period for PSO in seconds
 pulse_width = 0.000_1  # Default pulse width in seconds
 step_distance = 0.01  # Default distance for PSO in mm
-sampling_freq = 1000 # 100Hz 
+sampling_freq = 1000 # 100Hz
+# Top plate (platform) mounting surface above the bottom base mounting surface at the zero pose.
+# HEX300-230HL in HexCfg.ini: BasePivotHeight 17 + BaseToPlatformPivotOffset 196.25 + PlatformPivotToMountingSurface 17
+PLATFORM_HEIGHT = 230.25
+# Kinematics modes of the controller's hexapod library (HexCLibrary.a1lib, auto-imported).
+# Note: EnableWork/SetBaseToWork/SetToolPoint/EnableTool belong to the older HexapodLibrary, which this controller does not load.
+HEXAPOD_MODES = {'Disable': 'DisableHexapod()', 'Global': 'EnableGlobalMode()',
+                 'Local': 'EnableLocalMode()', 'Strut': 'EnableStrutMode()'}
+SCRATCH_TASK = 4      # task used to run hexapod library getters
+SCRATCH_INDEX = 200   # $rtask/$itask slots on SCRATCH_TASK used to return getter values
 class Hexapod:
     """A class to use pipython"""
     step_distance = step_distance
@@ -25,7 +34,7 @@ class Hexapod:
             if len(_m)>3:
                 _direct_connection_needed = True
         if _direct_connection_needed:
-            self.controller = a1.Controller.connect(host=IP)
+            self.controller = a1.Controller.connect(host=IPorBasePV or IP)
             self.isEPICS = False
         else:
             import ephex as hp
@@ -60,9 +69,16 @@ class Hexapod:
                 continue
             self.axes.append(ax.identification.axisname.value)
 
+    # Homing acts on the strut drives (axes 0-5) in Strut mode, as the library's InitHexapod() does.
+    def home_axis(self, axis):
+        self.set_hexapod_mode('Strut')
+        self.controller.runtime.commands.motion.home(axis)
+
     def home_all(self):
-        self.controller.runtime.commands.execute("DisableHexapod()")
-        self.controller.runtime.commands.motion.home([0, 1,2,3,4,5])
+        # one strut at a time
+        self.set_hexapod_mode('Strut')
+        for axis in [0, 1, 2, 3, 4, 5]:
+            self.controller.runtime.commands.motion.home(axis)
 
     def get_pos(self):
         # DriveStatus is a series of bits that can be masked. You will use it to get the axis "enabled" bit.
@@ -187,28 +203,65 @@ class Hexapod:
                     ax.motion.defaultaxisspeed.value = val
 
     def enable_all_axes(self):
+        # Only enables the drives. Kinematics are turned on separately with enable_kinematics();
+        # EnableGlobalMode() homes the struts first if they are not homed.
         self.controller.runtime.commands.motion.enable([0, 1,2,3,4,5,6,7,8,9,10,11])
-        self.enable_work()
 
     def disable_all_axes(self):
         self.controller.runtime.commands.motion.disable([0, 1,2,3,4,5,6,7,8,9,10,11])
 
     # This define the work coordinate system with offsets from the base coordinate system.
     def set_work(self, xoff=0, yoff=0, zoff=0, aoff=0, boff=0, coff=0):
-        # disable the real-time hexapod kinematics. 
+        # disable the real-time hexapod kinematics.
         ''' After you issue the DisableHexapod() library function, you get full control of each strut. Strut axes are
         named ST1 through ST6. Until you reset or power cycle the controller, it stores all the information
         from previous tool and offset settings.'''
-        self.controller.runtime.commands.execute("DisableHexapod()")
         cmd = f"SetBaseToWork({xoff},{yoff},{zoff},{aoff},{boff},{coff})"
         self.controller.runtime.commands.execute(cmd)
     
     def enable_work(self):
-        self.controller.runtime.commands.execute("EnableWork()")
+        self.enable_kinematics()
+
+    # Hexapod library (HexCLibrary) functions
+    def set_hexapod_mode(self, mode='Global'):
+        # mode: 'Disable' (kinematics off, strut control), 'Global', 'Local', or 'Strut'
+        self.controller.runtime.commands.execute(HEXAPOD_MODES[mode])
+
+    def enable_kinematics(self):
+        self.set_hexapod_mode('Global')
+
+    def disable_kinematics(self):
+        self.set_hexapod_mode('Disable')
+
+    def get_hexapod_mode(self):
+        # -10 means the hexapod is not initialized
+        self.controller.runtime.commands.execute(f"$itask[{SCRATCH_INDEX}] = GetHexapodMode()", SCRATCH_TASK)
+        return self.controller.runtime.variables.task.get_integer(SCRATCH_TASK, SCRATCH_INDEX)
+
+    def set_rotation_point(self, x=0, y=0, z=0):
+        self.controller.runtime.commands.execute(f"SetRotationPoint({x:.6f}, {y:.6f}, {z:.6f})")
+
+    def get_rotation_point(self):
+        i = SCRATCH_INDEX
+        cmd = ("var $x as real\nvar $y as real\nvar $z as real\nGetRotationPoint($x, $y, $z)\n"
+               f"$rtask[{i}] = $x\n$rtask[{i+1}] = $y\n$rtask[{i+2}] = $z")
+        self.controller.runtime.commands.execute(cmd, SCRATCH_TASK)
+        return self.controller.runtime.variables.task.get_reals(SCRATCH_TASK, i, 3)
+
+    # Users measure the center of rotation (x, y, z) in mm from the center of the top plate
+    # with the hexapod at its zero pose. The top plate moves, so the point is converted to the
+    # bottom base coordinate system before it is sent as the rotation point.
+    # frame='platform' sends the measured offset unchanged instead.
+    def set_center_of_rotation_from_measurement(self, x=0, y=0, z=0, frame='base'):
+        if frame == 'base':
+            point = (x, y, z + PLATFORM_HEIGHT)
+        else:
+            point = (x, y, z)
+        self.set_rotation_point(*point)
+        return point
 
     # This define the tool coordinate system with offsets from the platform center which is [0, 0, 230.25, 0, 0, 0] from base
     def set_tool(self, tool="Tool1", xoff=0, yoff=0, zoff=0, aoff=0, boff=0, coff=0):
-        self.controller.runtime.commands.execute("DisableHexapod()")
         cmd = f'SetToolPoint(1, "{tool}", {xoff},{yoff},{zoff},{aoff},{boff},{coff})'
         self.controller.runtime.commands.execute(cmd)
         cmd = f'ActivateTool("{tool}")'
@@ -217,13 +270,23 @@ class Hexapod:
     
     def acknowledgeall(self):
         self.controller.runtime.commands.fault_and_error.acknowledgeall()
+
+    def clear_errors(self):
+        # Acknowledge all axis faults and task errors. A limit fault comes back if the axis is
+        # still on the limit switch and is commanded further into it; move it off the other way.
+        # Returns the remaining AxisFault bits per axis (0 = cleared).
+        self.acknowledgeall()
+        cfg = a1.StatusItemConfiguration()
+        for ax in self.axes:
+            cfg.axis.add(a1.AxisStatusItem.AxisFault, ax)
+        results = self.controller.runtime.status.get_status_items(cfg)
+        return {ax: int(results.axis.get(a1.AxisStatusItem.AxisFault, ax).value) for ax in self.axes}
         
     # set the current position as [0, 0, 0, 0, 0, 0] in tool coordinate system
     def enable_tool(self):
         self.controller.runtime.commands.execute("EnableTool()")
     
     def activate_tool(self, tool='tool1'):
-        self.controller.runtime.commands.execute("DisableHexapod()")
         cmd = f'ActivateTool("{tool}")'
         self.controller.runtime.commands.execute(cmd)
         
@@ -250,22 +313,22 @@ class Hexapod:
             self.controller.runtime.tasks[3].program.stop()
 
     def set_pulsestream(self):
-        self.controller.runtime.commands.device.drivepulsestreamoff('ST1') # ST1 is the real axis issuing PSO firing pulses
-        self.controller.runtime.commands.execute('DrivePulseStreamConfigure(ST1, [X, Y, Z], [1.0, 1.0, 1.0])') # X/Y/Z are the virtual axes being tracked. ST1 actually fires PSO, scale is 1.0
-        self.controller.runtime.commands.device.drivepulsestreamon('ST1') # Turns on ST1's pulse stream input
+        self.controller.runtime.commands.device.drivepulsestreamoff('X') # X is the real axis issuing PSO firing pulses
+        self.controller.runtime.commands.execute('DrivePulseStreamConfigure(X, [X, Y, Z], [1.0, 1.0, 1.0])') # X/Y/Z are the virtual axes being tracked. X actually fires PSO, scale is 1.0
+        self.controller.runtime.commands.device.drivepulsestreamon('X') # Turns on X's pulse stream input
 
     def fly_conf(self):
-        self.controller.runtime.commands.pso.psoreset('ST1') #Reset all PSO configuration
-        #self.controller.runtime.commands.device.drivepulsestreamoff('ST1') # ST1 is the real axis issuing PSO firing pulses
-        self.controller.runtime.commands.pso.psodistanceconfigureinputs('ST1', [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
-        self.controller.runtime.commands.pso.psowaveformconfiguremode('ST1', a1.PsoWaveformMode.Pulse)
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount('ST1', 1) # 1 pulse (period) per event
-        self.controller.runtime.commands.pso.psowaveformon('ST1') # Turn on waveform generator
+        self.controller.runtime.commands.pso.psoreset('X') #Reset all PSO configuration
+        #self.controller.runtime.commands.device.drivepulsestreamoff('X') # X is the real axis issuing PSO firing pulses
+        self.controller.runtime.commands.pso.psodistanceconfigureinputs('X', [a1.PsoDistanceInput.iXR3DrivePulseStream]) # Fire based on virtual counts from the iXR3 pulse stream
+        self.controller.runtime.commands.pso.psowaveformconfiguremode('X', a1.PsoWaveformMode.Pulse)
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedcount('X', 1) # 1 pulse (period) per event
+        self.controller.runtime.commands.pso.psowaveformon('X') # Turn on waveform generator
 
     def goto_start_pos(self, axis='X'):
         default_speed = 5
         # turn off pso
-        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1')
+        self.controller.runtime.commands.pso.psodistanceeventsoff('X')
         #global motor_dict
         self.controller.runtime.commands.motion.moveabsolute(axis, [self.start_pos], speeds=[default_speed]) # Move axis to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
@@ -282,7 +345,7 @@ class Hexapod:
             print("Task2 is good to go.")
 
     def turn_off_pso(self):
-        self.controller.runtime.commands.pso.psooutputoff('ST1') # Turn off PSO 
+        self.controller.runtime.commands.pso.psooutputoff('X') # Turn off PSO 
 
     def set_pulse(self, axis = 'X', step_distance=0, period=0, pulse_width = 0):
         if step_distance != 0:
@@ -298,22 +361,22 @@ class Hexapod:
         pulsewidth_us = self.pulse_width*1_000_000
         #print(pulse_distance, ' pulse distance ', pulsewidth_us, ' period')
 
-        self.controller.runtime.commands.pso.psodistanceconfigurefixeddistance('ST1', pulse_distance)
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('ST1', period_us) # usec total time
-        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('ST1', pulsewidth_us) # usec
-        self.controller.runtime.commands.pso.psowaveformapplypulseconfiguration('ST1')# Applies the previous pulse configuration
-        self.controller.runtime.commands.pso.psooutputconfigureoutput('ST1', a1.PsoOutputPin.XR3PsoOutput1)
-        self.controller.runtime.commands.pso.psooutputconfiguresource('ST1', a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
-        self.controller.runtime.commands.pso.psodistancecounteron('ST1') # Enable the distance counter
-        self.controller.runtime.commands.pso.psodistanceeventson('ST1') # Turn on PSO
+        self.controller.runtime.commands.pso.psodistanceconfigurefixeddistance('X', pulse_distance)
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedtotaltime('X', period_us) # usec total time
+        self.controller.runtime.commands.pso.psowaveformconfigurepulsefixedontime('X', pulsewidth_us) # usec
+        self.controller.runtime.commands.pso.psowaveformapplypulseconfiguration('X')# Applies the previous pulse configuration
+        self.controller.runtime.commands.pso.psooutputconfigureoutput('X', a1.PsoOutputPin.XR3PsoOutput1)
+        self.controller.runtime.commands.pso.psooutputconfiguresource('X', a1.PsoOutputSource.Waveform) # Use waveform module output as PSO output
+        self.controller.runtime.commands.pso.psodistancecounteron('X') # Enable the distance counter
+        self.controller.runtime.commands.pso.psodistanceeventson('X') # Turn on PSO
         
     def run_traj_command_queue(self, axis='X', start=1, final=0, time=1, wait=True):
         N_pulses = int(abs(final - start) / self.step_distance)  # Calculate the number of pulses to fire
         speed = abs(final-start)/time
         self.N_pulses = N_pulses
         self.speed = speed
-        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1') # Turn on PSO
-        self.controller.runtime.commands.motion.moveabsolute(axis, [start], [5]) # Move ST1 to the specified position
+        self.controller.runtime.commands.pso.psodistanceeventsoff('X') # Turn on PSO
+        self.controller.runtime.commands.motion.moveabsolute(axis, [start], [5]) # Move X to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
         if type(self.command_queue) ==type(None):
             if self.controller.runtime.tasks[3].status.task_state == a1.TaskState.QueueRunning:
@@ -323,8 +386,8 @@ class Hexapod:
         except:
             pass
         self.command_queue.pause()
-        self.command_queue.commands.pso.psodistanceeventson('ST1') # Turn on PSO
-        self.command_queue.commands.motion.moveabsolute(axis, [final], [speed]) # Move ST1 to the specified position
+        self.command_queue.commands.pso.psodistanceeventson('X') # Turn on PSO
+        self.command_queue.commands.motion.moveabsolute(axis, [final], [speed]) # Move X to the specified position
         self.command_queue.commands.motion.waitformotiondone(axis)
         self.command_queue.resume()
         if wait:
@@ -335,11 +398,11 @@ class Hexapod:
         speed = abs(final-start)/time
         self.N_pulses = N_pulses
         self.speed = speed
-        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1') # Turn on PSO
-        self.controller.runtime.commands.motion.moveabsolute(axis, [start], [5]) # Move ST1 to the specified position
+        self.controller.runtime.commands.pso.psodistanceeventsoff('X') # Turn on PSO
+        self.controller.runtime.commands.motion.moveabsolute(axis, [start], [5]) # Move X to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
-        self.controller.runtime.commands.pso.psodistanceeventson('ST1') # Turn on PSO
-        self.controller.runtime.commands.motion.moveabsolute(axis, [final], [speed]) # Move ST1 to the specified position
+        self.controller.runtime.commands.pso.psodistanceeventson('X') # Turn on PSO
+        self.controller.runtime.commands.motion.moveabsolute(axis, [final], [speed]) # Move X to the specified position
         if wait:
             self.controller.runtime.commands.motion.waitformotiondone(axis)
 
@@ -363,8 +426,8 @@ class Hexapod:
         X_distance = xf-xi
         speed = abs(X_distance)/time_per_line
         self.speed = speed
-        self.controller.runtime.commands.pso.psodistanceeventsoff('ST1') # Turn on PSO
-        self.controller.runtime.commands.motion.moveabsolute(axis, start, defaultspeed) # Move ST1 to the specified position
+        self.controller.runtime.commands.pso.psodistanceeventsoff('X') # Turn on PSO
+        self.controller.runtime.commands.motion.moveabsolute(axis, start, defaultspeed) # Move X to the specified position
         self.controller.runtime.commands.motion.waitformotiondone(axis)
 
         self.set_pulse(step_distance=pulse_step)
@@ -386,7 +449,7 @@ class Hexapod:
         
         if self.controller.runtime.tasks[3].status.task_state != a1.TaskState.QueuePaused:
             self.command_queue.pause()
-        self.controller.runtime.commands.pso.psodistanceeventson('ST1') # Turn on PSO
+        self.controller.runtime.commands.pso.psodistanceeventson('X') # Turn on PSO
 
         # Add all the AeroScript commands that you want to execute.
         self.command_queue.commands.advanced_motion.velocityblendingon()
@@ -441,7 +504,7 @@ class Hexapod:
         self.scan_axes = axis
         #N_pulses = int(abs(final - start) / self.step_distance)  # Calculate the number of pulses to fire
         #self.N_pulses = N_pulses
-        self.command_queue.commands.pso.psooutputoff('ST1') # Turn off PSO 
+        self.command_queue.commands.pso.psooutputoff('X') # Turn off PSO 
         self.command_queue.commands.advanced_motion.velocityblendingoff()
         self.command_queue.commands.motion.waitformotiondone(axis)
 
@@ -596,7 +659,7 @@ def set_servo_paramters(controller, filename = ''):
     conf = controller.configuration.parameters.get_configuration()
     for i, ax in enumerate(conf.axes):
         #sv = ax.servo
-        # if no input, read params from ST1 and set them to other axes
+        # if no input, read params from X and set them to other axes
         if not isInputAvailable:
             if i==0:
                 continue
